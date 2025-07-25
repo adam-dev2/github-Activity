@@ -21,7 +21,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/github-activity'
+    mongoUrl: process.env.MONGODB_URI || 'mongodb+srv://adam222xyz:PbauxEHjkDWW7tT1@cluster0.i2sgm7s.mongodb.net/'
   }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
@@ -32,7 +32,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/github-activity')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://adam222xyz:PbauxEHjkDWW7tT1@cluster0.i2sgm7s.mongodb.net/')
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -49,7 +49,7 @@ const User = mongoose.model('User', userSchema);
 passport.use(new GitHubStrategy({
   clientID: 'Ov23li8HYM45WhtRfpeA',
   clientSecret: '519e59b772a4d35d6c4326e9b13a5847e2e0d8c6',
-  callbackURL: process.env.GITHUB_CALLBACK_URL || 'http://localhost:5000/auth/github/callback'
+  callbackURL: process.env.GITHUB_CALLBACK_URL || 'https://github-activity.onrender.com/auth/github/callback'
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await User.findOne({ githubId: profile.id });
@@ -336,7 +336,7 @@ app.get('/api/activity/:date', requireAuth, async (req, res) => {
 //   }
 // });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
