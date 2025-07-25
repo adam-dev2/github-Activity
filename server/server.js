@@ -49,7 +49,7 @@ const User = mongoose.model('User', userSchema);
 passport.use(new GitHubStrategy({
   clientID: 'Ov23li8HYM45WhtRfpeA',
   clientSecret: '519e59b772a4d35d6c4326e9b13a5847e2e0d8c6',
-  callbackURL: process.env.GITHUB_CALLBACK_URL || 'https://github-activity.onrender.com/auth/github/callback'
+  callbackURL: 'https://github-activity.onrender.com/auth/github/callback'
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await User.findOne({ githubId: profile.id });
