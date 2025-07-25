@@ -21,16 +21,24 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI
+    mongoUrl: process.env.MONGODB_URI || 'mongodb+srv://adam222xyz:PbauxEHjkDWW7tT1@cluster0.i2sgm7s.mongodb.net/'
   }),
   cookie: {
     httpOnly: true,
     secure: true,
     sameSite: 'none',
     maxAge: 24 * 60 * 60 * 1000
-  }
-
+  },
+  name: 'connect.sid', 
+  
 }));
+app.use((req, res, next) => {
+  console.log('Session ID:', req.sessionID);
+  console.log('Session:', req.session);
+  console.log('User:', req.user);
+  console.log('Is Authenticated:', req.isAuthenticated());
+  next();
+});
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -85,6 +93,9 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
+    if (!user) {
+      return done(null, false); // ✅ Handle missing user
+    }
     done(null, user);
   } catch (error) {
     done(error, null);
