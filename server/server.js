@@ -12,7 +12,7 @@ require('dotenv').config();
 const app = express();
 
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: 'https://github-activity-silk.vercel.app',
   credentials: true
 }));
 app.use(express.json());
@@ -98,9 +98,9 @@ const requireAuth = (req, res, next) => {
 app.get('/auth/github', passport.authenticate('github', { scope: ['user', 'repo'] }));
 
 app.get('/auth/github/callback',
-  passport.authenticate('github', { failureRedirect: 'http://localhost:5173' }),
+  passport.authenticate('github', { failureRedirect: 'https://github-activity-silk.vercel.app' }),
   (req, res) => {
-    res.redirect('http://localhost:5173');
+    res.redirect('https://github-activity-silk.vercel.app');
   }
 );
 

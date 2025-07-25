@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Github, GitCommit, GitPullRequest, User, LogOut, Activity, Plus, Minus } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://github-activity.onrender.com';
 
 const App = () => {
   const [user, setUser] = useState(null);
