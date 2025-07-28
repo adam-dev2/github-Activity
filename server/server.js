@@ -11,15 +11,29 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS configuration
+// CORS configuration - more permissive for production debugging
 app.use(cors({
-  origin: `${process.env.CLIENT_URL}`,
-  credentials: true
+  origin: true, // Allow all origins temporarily
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
 }));
 
 app.use(express.json());
 
-// Session configuration - fixed for localhost development
+// Handle preflight requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
+// Session configuration - dynamic based on environment
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'github-activity-secret',
   resave: false,
@@ -29,9 +43,10 @@ app.use(session({
   }),
   cookie: {
     httpOnly: true,
-    secure: false, // Set to false for localhost development
-    sameSite: 'lax', // Changed from 'none' to 'lax' for localhost
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    secure: isProduction, // true for HTTPS in production, false for localhost
+    sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    domain: isProduction ? undefined : undefined // Let browser handle domain
   },
   name: 'connect.sid'
 }));
@@ -353,10 +368,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-// app.use('*', (req, res) => {
-//   res.status(404).json({ error: 'Route not found' });
-// });
+// 404 handler - must be last
+app.all('*', (req, res) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+});
 
 // Start server
 const PORT = process.env.PORT || 5000;
