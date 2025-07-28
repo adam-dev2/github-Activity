@@ -11,42 +11,49 @@ require('dotenv').config();
 
 const app = express();
 
+// CORS configuration
 app.use(cors({
-  origin: 'https://github-activity-silk.vercel.app',
+  origin: process.env.CLIENT_URL,
   credentials: true
 }));
+
 app.use(express.json());
+
+// Session configuration - fixed for localhost development
 app.use(session({
   secret: process.env.SESSION_SECRET || 'github-activity-secret',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI || 'mongodb+srv://adam222xyz:PbauxEHjkDWW7tT1@cluster0.i2sgm7s.mongodb.net/'
+    mongoUrl: process.env.MONGODB_URI
   }),
   cookie: {
     httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-    maxAge: 24 * 60 * 60 * 1000
+    secure: false, // Set to false for localhost development
+    sameSite: 'lax', // Changed from 'none' to 'lax' for localhost
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   },
-  name: 'connect.sid', 
-  
+  name: 'connect.sid'
 }));
-app.use((req, res, next) => {
-  console.log('Session ID:', req.sessionID);
-  console.log('Session:', req.session);
-  console.log('User:', req.user);
-  console.log('Is Authenticated:', req.isAuthenticated());
-  next();
-});
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://adam222xyz:PbauxEHjkDWW7tT1@cluster0.i2sgm7s.mongodb.net/')
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// Debug middleware (remove in production)
+app.use((req, res, next) => {
+  console.log('Is Authenticated:', req.isAuthenticated());
+  next();
+});
 
+// MongoDB connection - removed hardcoded fallback
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  });
+
+// User schema
 const userSchema = new mongoose.Schema({
   githubId: String,
   username: String,
@@ -57,10 +64,11 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
+// GitHub Strategy - using environment variables
 passport.use(new GitHubStrategy({
-  clientID: 'Ov23li8HYM45WhtRfpeA',
-  clientSecret: '519e59b772a4d35d6c4326e9b13a5847e2e0d8c6',
-  callbackURL: 'https://github-activity.onrender.com/auth/github/callback'
+  clientID: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackURL: process.env.GITHUB_CALLBACK_URL
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await User.findOne({ githubId: profile.id });
@@ -82,6 +90,7 @@ passport.use(new GitHubStrategy({
     await user.save();
     done(null, user);
   } catch (error) {
+    console.error('GitHub Strategy error:', error);
     done(error, null);
   }
 }));
@@ -94,14 +103,16 @@ passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
     if (!user) {
-      return done(null, false); // ✅ Handle missing user
+      return done(null, false);
     }
     done(null, user);
   } catch (error) {
+    console.error('Deserialize user error:', error);
     done(error, null);
   }
 });
 
+// Auth middleware
 const requireAuth = (req, res, next) => {
   if (req.isAuthenticated()) {
     return next();
@@ -109,48 +120,46 @@ const requireAuth = (req, res, next) => {
   res.status(401).json({ error: 'Authentication required' });
 };
 
-app.get('/auth/github', passport.authenticate('github', { scope: ['user', 'repo'] }));
-
-app.get('/auth/github/callback',
-  passport.authenticate('github', { failureRedirect: 'https://github-activity-silk.vercel.app' }),
-  (req, res) => {
-    res.redirect('https://github-activity-silk.vercel.app');
-  }
-);
-
-app.post('/auth/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Logout failed' });
-    }
-    res.json({ message: 'Logged out successfully' });
-  });
-});
-
-app.get('/api/user', requireAuth, (req, res) => {
-  res.json({
-    id: req.user._id,
-    username: req.user.username,
-    displayName: req.user.displayName,
-    avatar: req.user.avatar
-  });
-});
-
+// GitHub API helper function
 const getGitHubData = async (url, token) => {
   try {
     const response = await axios.get(url, {
       headers: {
         'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'GitHub-Activity-Tracker'
+      },
+      timeout: 10000 // 10 second timeout
     });
     return response.data;
   } catch (error) {
-    console.error('GitHub API error:', error.response?.data || error.message);
+    if (error.response?.status === 403) {
+      console.warn('GitHub API rate limit or forbidden:', error.response?.data);
+    } else {
+      console.error('GitHub API error:', error.response?.data || error.message);
+    }
     throw error;
   }
 };
 
+// Helper function to get commit details with stats
+const getCommitDetails = async (repoFullName, sha, token) => {
+  try {
+    const commit = await getGitHubData(
+      `https://api.github.com/repos/${repoFullName}/commits/${sha}`,
+      token
+    );
+    return {
+      additions: commit.stats?.additions || 0,
+      deletions: commit.stats?.deletions || 0
+    };
+  } catch (error) {
+    console.warn(`Failed to get commit details for ${sha}:`, error.message);
+    return { additions: 0, deletions: 0 };
+  }
+};
+
+// Date helper functions
 const formatDateForGitHub = (date) => {
   return date.toISOString().split('T')[0];
 };
@@ -161,11 +170,53 @@ const getNextDay = (date) => {
   return nextDay;
 };
 
+// Auth routes
+app.get('/auth/github', passport.authenticate('github', { scope: ['user', 'repo'] }));
+
+app.get('/auth/github/callback',
+  passport.authenticate('github', { failureRedirect: process.env.CLIENT_URL }),
+  (req, res) => {
+    res.redirect(process.env.CLIENT_URL);
+  }
+);
+
+app.post('/auth/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      console.error('Logout error:', err);
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+      }
+      res.clearCookie('connect.sid');
+      res.json({ message: 'Logged out successfully' });
+    });
+  });
+});
+
+// API routes
+app.get('/api/user', requireAuth, (req, res) => {
+  res.json({
+    id: req.user._id,
+    username: req.user.username,
+    displayName: req.user.displayName,
+    avatar: req.user.avatar
+  });
+});
+
+// Main activity route - improved with better error handling
 app.get('/api/activity/:date', requireAuth, async (req, res) => {
   try {
     const { date } = req.params;
     const selectedDate = new Date(date);
     const nextDate = getNextDay(selectedDate);
+
+    // Validate date
+    if (isNaN(selectedDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
 
     const since = selectedDate.toISOString();
     const until = nextDate.toISOString();
@@ -173,42 +224,50 @@ app.get('/api/activity/:date', requireAuth, async (req, res) => {
     const commits = [];
     const pullRequests = [];
 
+    // Get user's repositories
     const repos = await getGitHubData(
-      `https://api.github.com/user/repos?sort=updated&per_page=100`,
+      `https://api.github.com/user/repos?sort=updated&per_page=100&affiliation=owner,collaborator`,
       req.user.accessToken
     );
 
+    // Process repositories with concurrency control
     await pMap(
-      repos,
+      repos.filter(repo => {
+        // Only check repos updated recently to reduce API calls
+        const pushedAt = new Date(repo.pushed_at);
+        const daysBetween = Math.abs(selectedDate - pushedAt) / (1000 * 60 * 60 * 24);
+        return daysBetween <= 30; // Only check repos updated in last 30 days
+      }),
       async (repo) => {
         try {
-          const pushedAt = new Date(repo.pushed_at);
-          if (pushedAt < selectedDate) return;
-
+          // Get commits and PRs in parallel
           const [repoCommits, repoPRs] = await Promise.all([
             getGitHubData(
-              `https://api.github.com/repos/${repo.full_name}/commits?author=${req.user.username}&since=${since}&until=${until}`,
+              `https://api.github.com/repos/${repo.full_name}/commits?author=${req.user.username}&since=${since}&until=${until}&per_page=100`,
               req.user.accessToken
-            ),
+            ).catch(() => []), // Return empty array on error
             getGitHubData(
-              `https://api.github.com/repos/${repo.full_name}/pulls?state=all&sort=updated&direction=desc`,
+              `https://api.github.com/repos/${repo.full_name}/pulls?state=all&sort=updated&direction=desc&per_page=100`,
               req.user.accessToken
-            )
+            ).catch(() => []) // Return empty array on error
           ]);
 
-          repoCommits.forEach(commit => {
+          // Process commits with detailed stats
+          for (const commit of repoCommits) {
+            const stats = await getCommitDetails(repo.full_name, commit.sha, req.user.accessToken);
             commits.push({
               id: commit.sha,
-              message: commit.commit.message,
+              message: commit.commit.message.split('\n')[0], // First line only
               repository: repo.name,
               repositoryUrl: repo.html_url,
               url: commit.html_url,
               date: commit.commit.author.date,
-              additions: commit.stats?.additions || 0,
-              deletions: commit.stats?.deletions || 0
+              additions: stats.additions,
+              deletions: stats.deletions
             });
-          });
+          }
 
+          // Process pull requests
           repoPRs.forEach(pr => {
             const prDate = new Date(pr.created_at);
             if (
@@ -231,126 +290,77 @@ app.get('/api/activity/:date', requireAuth, async (req, res) => {
           });
 
         } catch (repoError) {
-          console.log(`Skipping repo ${repo.name}:`, repoError.message);
+          console.warn(`Skipping repo ${repo.name}:`, repoError.message);
+          // Continue processing other repos
         }
       },
-      { concurrency: 5 } 
+      { concurrency: 3 } // Reduced concurrency to avoid rate limits
     );
 
+    // Sort results
     commits.sort((a, b) => new Date(b.date) - new Date(a.date));
     pullRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Calculate summary
+    const summary = {
+      totalCommits: commits.length,
+      totalPullRequests: pullRequests.length,
+      totalAdditions: commits.reduce((sum, c) => sum + (c.additions || 0), 0),
+      totalDeletions: commits.reduce((sum, c) => sum + (c.deletions || 0), 0)
+    };
 
     res.json({
       date: formatDateForGitHub(selectedDate),
       commits,
       pullRequests,
-      summary: {
-        totalCommits: commits.length,
-        totalPullRequests: pullRequests.length,
-        totalAdditions: commits.reduce((sum, c) => sum + c.additions, 0),
-        totalDeletions: commits.reduce((sum, c) => sum + c.deletions, 0)
-      }
+      summary
     });
 
   } catch (error) {
     console.error('Error fetching activity:', error);
-    res.status(500).json({ error: 'Failed to fetch GitHub activity' });
+    
+    // Handle specific error types
+    if (error.response?.status === 401) {
+      return res.status(401).json({ error: 'GitHub authentication expired. Please login again.' });
+    }
+    
+    if (error.response?.status === 403) {
+      return res.status(429).json({ error: 'GitHub API rate limit exceeded. Please try again later.' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to fetch GitHub activity',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
-// app.get('/api/activity/:date', requireAuth, async (req, res) => {
-//   try {
-//     const { date } = req.params;
-//     const selectedDate = new Date(date);
-//     const nextDate = getNextDay(selectedDate);
-    
-//     const since = selectedDate.toISOString();
-//     const until = nextDate.toISOString();
-    
-//     // Get user's repositories
-//     const repos = await getGitHubData(
-//       `https://api.github.com/user/repos?sort=updated&per_page=100`,
-//       req.user.accessToken
-//     );
-    
-//     const commits = [];
-//     const pullRequests = [];
-    
-//     // Get commits for each repository
-//     for (const repo of repos) {
-//       try {
-//         // Get commits by the authenticated user for the selected date
-//         const repoCommits = await getGitHubData(
-//           `https://api.github.com/repos/${repo.full_name}/commits?author=${req.user.username}&since=${since}&until=${until}`,
-//           req.user.accessToken
-//         );
-        
-//         repoCommits.forEach(commit => {
-//           commits.push({
-//             id: commit.sha,
-//             message: commit.commit.message,
-//             repository: repo.name,
-//             repositoryUrl: repo.html_url,
-//             url: commit.html_url,
-//             date: commit.commit.author.date,
-//             additions: commit.stats?.additions || 0,
-//             deletions: commit.stats?.deletions || 0
-//           });
-//         });
-        
-//         // Get pull requests for the selected date
-//         const repoPRs = await getGitHubData(
-//           `https://api.github.com/repos/${repo.full_name}/pulls?state=all&sort=updated&direction=desc`,
-//           req.user.accessToken
-//         );
-        
-//         repoPRs.forEach(pr => {
-//           const prDate = new Date(pr.created_at);
-//           if (prDate >= selectedDate && prDate < nextDate && pr.user.login === req.user.username) {
-//             pullRequests.push({
-//               id: pr.id,
-//               title: pr.title,
-//               number: pr.number,
-//               repository: repo.name,
-//               repositoryUrl: repo.html_url,
-//               url: pr.html_url,
-//               state: pr.state,
-//               createdAt: pr.created_at,
-//               updatedAt: pr.updated_at
-//             });
-//           }
-//         });
-        
-//       } catch (repoError) {
-//         // Skip repositories that can't be accessed
-//         console.log(`Skipping repository ${repo.name}:`, repoError.message);
-//         continue;
-//       }
-//     }
-    
-//     // Sort by date (newest first)
-//     commits.sort((a, b) => new Date(b.date) - new Date(a.date));
-//     pullRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
-//     res.json({
-//       date: formatDateForGitHub(selectedDate),
-//       commits,
-//       pullRequests,
-//       summary: {
-//         totalCommits: commits.length,
-//         totalPullRequests: pullRequests.length,
-//         totalAdditions: commits.reduce((sum, c) => sum + c.additions, 0),
-//         totalDeletions: commits.reduce((sum, c) => sum + c.deletions, 0)
-//       }
-//     });
-    
-//   } catch (error) {
-//     console.error('Error fetching activity:', error);
-//     res.status(500).json({ error: 'Failed to fetch GitHub activity' });
-//   }
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    details: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// 404 handler
+// app.use('*', (req, res) => {
+//   res.status(404).json({ error: 'Route not found' });
 // });
 
-const PORT = 5000;
+// Start server
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
