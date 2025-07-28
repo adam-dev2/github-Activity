@@ -14,7 +14,8 @@ const app = express();
 // Trust proxy for Render deployment
 app.set('trust proxy', 1);
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
 
 // CORS configuration - Fixed for cross-origin cookies
 app.use(cors({
