@@ -22,12 +22,11 @@ const App = () => {
 
   const checkAuthStatus = async () => {
    try {
-    const response = await fetch(`${API_BASE}/api/user`, {
+    const response =await fetch(`${API_BASE}/api/user`, {
+      method: 'GET',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      }
     });
+
     
     if (response.ok) {
       const userData = await response.json();
