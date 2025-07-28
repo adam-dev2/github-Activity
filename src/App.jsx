@@ -21,20 +21,25 @@ const App = () => {
   }, [user, selectedDate]);
 
   const checkAuthStatus = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/user`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
+   try {
+    const response = await fetch(`${API_BASE}/api/user`, {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
       }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-    } finally {
-      setLoading(false);
+    });
+    
+    if (response.ok) {
+      const userData = await response.json();
+      setUser(userData);
+    } else {
+      console.log('Not authenticated, response status:', response.status);
     }
+  } catch (error) {
+    console.error('Auth check failed:', error);
+  } finally {
+    setLoading(false);
+  }
   };
 
   const fetchActivity = async (date) => {
