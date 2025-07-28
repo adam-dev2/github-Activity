@@ -369,9 +369,9 @@ app.use((err, req, res, next) => {
 });
 
 // 404 handler - must be last
-app.all('*', (req, res) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
-});
+// app.all('*', (req, res) => {
+//   res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+// });
 
 // Start server
 const PORT = process.env.PORT || 5000;
