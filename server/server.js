@@ -29,7 +29,7 @@ app.use(session({
   }),
   cookie: {
     httpOnly: true,
-    secure: false, // Set to false for localhost development
+    secure: true, // Set to false for localhost development
     sameSite: 'lax', // Changed from 'none' to 'lax' for localhost
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   },
