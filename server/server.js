@@ -22,6 +22,7 @@ app.use(cors({
     // Allow requests from your Render domains and localhost for development
     const allowedOrigins = [
       'https://github-activity-frontend.onrender.com', // Your frontend Render URL
+      'https://github-activity-frontend.onrender.com/api/user', // Your frontend Render URL
       'https://github-activity.onrender.com', // Same domain requests
       'http://localhost:5173',
       'http://localhost:3000'
@@ -340,7 +341,7 @@ app.get('/api/test-cookies', (req, res) => {
   res.cookie('test-cookie', 'test-value', {
     httpOnly: false, // Allow JS access for testing
     secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
+    sameSite: 'lax',
     maxAge: 60000, // 1 minute
     domain: undefined
   });
@@ -352,7 +353,7 @@ app.get('/api/test-cookies', (req, res) => {
     hasSession: !!req.session,
     cookieConfig: {
       secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
+      sameSite: 'lax',
       domain: 'undefined (let browser handle)'
     }
   });
@@ -524,5 +525,5 @@ app.listen(PORT, () => {
   console.log(`Client URL: ${process.env.CLIENT_URL}`);
   console.log(`Callback URL: ${process.env.GITHUB_CALLBACK_URL}`);
   console.log(`Production mode: ${isProduction}`);
-  console.log(`Session config: secure=${isProduction}, sameSite=${isProduction ? 'none' : 'lax'}`);
+  console.log(`Session config: secure=${isProduction}, sameSite='lax'`);
 });
