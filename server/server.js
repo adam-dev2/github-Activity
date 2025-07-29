@@ -62,7 +62,7 @@ app.use(session({
     secure: isProduction, // HTTPS in production
     sameSite: 'lax', // Use 'lax' for same-domain hosting
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    domain: undefined // Let browser handle domain automatically
+    domain: '.onrender.com' // Let browser handle domain automatically
   },
   name: 'github.session',
   rolling: true, // Reset expiry on each request
@@ -305,7 +305,7 @@ app.post('/auth/logout', (req, res) => {
         httpOnly: true,
         secure: isProduction,
         sameSite: 'lax',
-        domain: undefined
+        domain: '.onrender.com'
       });
       res.json({ message: 'Logged out successfully' });
     });
@@ -343,7 +343,7 @@ app.get('/api/test-cookies', (req, res) => {
     secure: isProduction,
     sameSite: 'lax',
     maxAge: 60000, // 1 minute
-    domain: undefined
+    domain: '.onrender.com'
   });
   
   res.json({
@@ -354,7 +354,7 @@ app.get('/api/test-cookies', (req, res) => {
     cookieConfig: {
       secure: isProduction,
       sameSite: 'lax',
-      domain: 'undefined (let browser handle)'
+      domain: '.onrender.com'
     }
   });
 });
