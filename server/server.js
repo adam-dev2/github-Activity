@@ -11,24 +11,17 @@ require('dotenv').config();
 
 const app = express();
 
-// Trust proxy for Render deployment
 app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 
-// CORS configuration - Simplified for same-domain hosting on Render
 app.use(cors({
   origin: ['https://github-activity-frontend.onrender.com'],
   credentials: true
 }));
 
-
-// Handle preflight requests
-// app.options('*', cors());
-
 app.use(express.json());
 
-// Session configuration - Optimized for Render same-domain hosting
 app.use(session({
   secret: process.env.SESSION_SECRET || 'github-activity-secret-key-change-in-production',
   resave: false,
@@ -36,23 +29,22 @@ app.use(session({
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     touchAfter: 24 * 3600,
-    ttl: 7 * 24 * 60 * 60 // 7 days TTL
+    ttl: 7 * 24 * 60 * 60 
   }),
   cookie: {
     httpOnly: true,
     secure: true,
     sameSite: 'none',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000 
   },
   name: 'github.session',
-  rolling: true, // Reset expiry on each request
-  proxy: true // Trust proxy for secure cookies
+  rolling: true, 
+  proxy: true 
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Enhanced debug middleware
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
   console.log('Origin:', req.get('Origin'));
@@ -71,7 +63,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => {
@@ -79,7 +70,6 @@ mongoose.connect(process.env.MONGODB_URI)
     process.exit(1);
   });
 
-// User schema
 const userSchema = new mongoose.Schema({
   githubId: String,
   username: String,
@@ -90,7 +80,6 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-// GitHub Strategy - Fixed
 passport.use(new GitHubStrategy({
   clientID: process.env.GITHUB_CLIENT_ID,
   clientSecret: process.env.GITHUB_CLIENT_SECRET,
@@ -148,7 +137,6 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Enhanced auth middleware with better error handling
 const requireAuth = (req, res, next) => {
   console.log('Auth check - Session:', !!req.session);
   console.log('Auth check - User:', !!req.user);
@@ -173,7 +161,6 @@ const requireAuth = (req, res, next) => {
   });
 };
 
-// GitHub API helper function
 const getGitHubData = async (url, token) => {
   try {
     const response = await axios.get(url, {
@@ -197,7 +184,6 @@ const getGitHubData = async (url, token) => {
   }
 };
 
-// Helper function to get commit details with stats
 const getCommitDetails = async (repoFullName, sha, token) => {
   try {
     const commit = await getGitHubData(
@@ -214,7 +200,6 @@ const getCommitDetails = async (repoFullName, sha, token) => {
   }
 };
 
-// Date helper functions
 const formatDateForGitHub = (date) => {
   return date.toISOString().split('T')[0];
 };
@@ -225,7 +210,6 @@ const getNextDay = (date) => {
   return nextDay;
 };
 
-// Health check endpoint - enhanced with session info
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -240,10 +224,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Auth routes - Fixed callback handling
 app.get('/auth/github', (req, res, next) => {
   console.log('Starting GitHub auth flow');
-  // Store the origin for later redirect
   if (req.get('Referer')) {
     req.session.authOrigin = req.get('Referer');
   }
@@ -259,7 +241,6 @@ app.get('/auth/github/callback',
     console.log('Session after auth:', req.sessionID);
     console.log('Session user:', req.session?.passport);
     
-    // Save session explicitly before redirect
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
@@ -292,7 +273,6 @@ app.post('/auth/logout', (req, res) => {
   });
 });
 
-// Debug session endpoint - enhanced
 app.get('/api/session', (req, res) => {
   res.json({
     sessionID: req.sessionID,
@@ -315,14 +295,12 @@ app.get('/api/session', (req, res) => {
   });
 });
 
-// Test endpoint to verify cookie handling
 app.get('/api/test-cookies', (req, res) => {
-  // Set a test cookie with the same settings as session cookie
   res.cookie('test-cookie', 'test-value', {
-    httpOnly: false, // Allow JS access for testing
+    httpOnly: false, 
     secure: isProduction,
     sameSite: 'none',
-    maxAge: 60000, // 1 minute
+    maxAge: 60000, 
     domain: '.onrender.com'
   });
   
@@ -339,7 +317,6 @@ app.get('/api/test-cookies', (req, res) => {
   });
 });
 
-// API routes
 app.get('/api/user', requireAuth, (req, res) => {
   console.log('User API called for:', req.user.username);
   res.json({
@@ -350,7 +327,6 @@ app.get('/api/user', requireAuth, (req, res) => {
   });
 });
 
-// Main activity route
 app.get('/api/activity/:date', requireAuth, async (req, res) => {
   try {
     const { date } = req.params;
@@ -369,7 +345,6 @@ app.get('/api/activity/:date', requireAuth, async (req, res) => {
     const commits = [];
     const pullRequests = [];
 
-    // Verify GitHub token is still valid
     try {
       await getGitHubData('https://api.github.com/user', req.user.accessToken);
     } catch (error) {
@@ -489,7 +464,6 @@ app.get('/api/activity/:date', requireAuth, async (req, res) => {
   }
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ 

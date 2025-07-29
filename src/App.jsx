@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Github, GitCommit, GitPullRequest, User, LogOut, Activity, Plus, Minus } from 'lucide-react';
 
-const API_BASE = 'https://github-activity.onrender.com'; // Update this to your backend Render URL
+const API_BASE = 'https://github-activity.onrender.com';
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -90,11 +90,9 @@ const App = () => {
 
   const handleLogin = () => {
     console.log('Initiating login...');
-    // Store current URL for potential redirect back
     const currentUrl = window.location.href;
     localStorage.setItem('preAuthUrl', currentUrl);
     
-    // Redirect to GitHub OAuth
     window.location.href = `${API_BASE}/auth/github`;
   };
 
@@ -153,7 +151,6 @@ const App = () => {
     });
   };
 
-  // Debug function to check session
   const checkSession = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/session`, {
@@ -214,7 +211,6 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
@@ -244,9 +240,7 @@ const App = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Date Selection */}
         <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             <div className="flex items-center gap-2">
@@ -285,7 +279,6 @@ const App = () => {
           </div>
         </div>
 
-        {/* Activity Content */}
         {loadingActivity ? (
           <div className="bg-white rounded-lg shadow-sm border p-12">
             <div className="flex items-center justify-center">
@@ -295,7 +288,6 @@ const App = () => {
           </div>
         ) : activity ? (
           <div className="space-y-6">
-            {/* Summary */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 Activity for {formatDate(activity.date)}
@@ -321,7 +313,6 @@ const App = () => {
               </div>
             </div>
 
-            {/* Commits */}
             {activity.commits.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border">
                 <div className="p-6 border-b">
@@ -371,7 +362,6 @@ const App = () => {
               </div>
             )}
 
-            {/* Pull Requests */}
             {activity.pullRequests.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border">
                 <div className="p-6 border-b">
@@ -417,7 +407,6 @@ const App = () => {
               </div>
             )}
 
-            {/* No Activity */}
             {activity.commits.length === 0 && activity.pullRequests.length === 0 && (
               <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
                 <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
