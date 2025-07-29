@@ -9,6 +9,7 @@ const App = () => {
   const [activity, setActivity] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     checkAuthStatus();
@@ -21,38 +22,64 @@ const App = () => {
   }, [user, selectedDate]);
 
   const checkAuthStatus = async () => {
-   try {
-    const response =await fetch(`${API_BASE}/api/user`, {
-      method: 'GET',
-      credentials: 'include',
-    });
+    try {
+      console.log('Checking auth status...');
+      const response = await fetch(`${API_BASE}/api/user`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
 
-    
-    if (response.ok) {
-      const userData = await response.json();
-      setUser(userData);
-    } else {
-      console.log('Not authenticated, response status:', response.status);
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('User authenticated:', userData.username);
+        setUser(userData);
+        setAuthError(null);
+      } else {
+        console.log('Not authenticated, response status:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.log('Auth error details:', errorData);
+        setAuthError(errorData.error || 'Authentication failed');
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      setAuthError('Failed to check authentication status');
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Auth check failed:', error);
-  } finally {
-    setLoading(false);
-  }
   };
 
   const fetchActivity = async (date) => {
     setLoadingActivity(true);
     try {
+      console.log('Fetching activity for date:', date);
       const response = await fetch(`${API_BASE}/api/activity/${date}`, {
-        credentials: 'include'
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
       
       if (response.ok) {
         const activityData = await response.json();
+        console.log('Activity fetched successfully');
         setActivity(activityData);
+      } else if (response.status === 401) {
+        console.log('Authentication expired, redirecting to login');
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.reauth) {
+          setUser(null);
+          setAuthError('Your session has expired. Please login again.');
+        }
       } else {
-        console.error('Failed to fetch activity');
+        console.error('Failed to fetch activity, status:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Activity error details:', errorData);
       }
     } catch (error) {
       console.error('Error fetching activity:', error);
@@ -62,19 +89,37 @@ const App = () => {
   };
 
   const handleLogin = () => {
+    console.log('Initiating login...');
+    // Store current URL for potential redirect back
+    const currentUrl = window.location.href;
+    localStorage.setItem('preAuthUrl', currentUrl);
+    
+    // Redirect to GitHub OAuth
     window.location.href = `${API_BASE}/auth/github`;
   };
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE}/auth/logout`, {
+      console.log('Logging out...');
+      const response = await fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
-      setUser(null);
-      setActivity(null);
+      
+      if (response.ok) {
+        console.log('Logout successful');
+        setUser(null);
+        setActivity(null);
+        setAuthError(null);
+      } else {
+        console.error('Logout failed');
+      }
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('Logout error:', error);
     }
   };
 
@@ -108,10 +153,26 @@ const App = () => {
     });
   };
 
+  // Debug function to check session
+  const checkSession = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/session`, {
+        credentials: 'include'
+      });
+      const sessionData = await response.json();
+      console.log('Session debug info:', sessionData);
+    } catch (error) {
+      console.error('Session check failed:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
       </div>
     );
   }
@@ -123,13 +184,27 @@ const App = () => {
           <div className="text-center">
             <Github className="h-16 w-16 text-gray-900 mx-auto mb-6" />
             <h1 className="text-2xl font-bold text-gray-900 mb-2">GitHub Activity Tracker</h1>
-            <p className="text-gray-600 mb-8">Track your daily commits and pull requests</p>
+            <p className="text-gray-600 mb-4">Track your daily commits and pull requests</p>
+            
+            {authError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-6">
+                <p className="text-red-600 text-sm">{authError}</p>
+              </div>
+            )}
+            
             <button
               onClick={handleLogin}
-              className="w-full bg-gray-900 text-white py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-gray-900 text-white py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 mb-4"
             >
               <Github className="h-5 w-5" />
               Sign in with GitHub
+            </button>
+            
+            <button
+              onClick={checkSession}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              Debug: Check Session
             </button>
           </div>
         </div>

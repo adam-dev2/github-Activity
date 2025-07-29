@@ -16,7 +16,6 @@ app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 
-
 // CORS configuration - Fixed for cross-origin cookies
 app.use(cors({
   origin: function(origin, callback) {
@@ -41,6 +40,9 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // Session configuration - Fixed for production
@@ -50,14 +52,16 @@ app.use(session({
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
-    touchAfter: 24 * 3600 // lazy session update
+    touchAfter: 24 * 3600,
+    ttl: 7 * 24 * 60 * 60 // 7 days TTL
   }),
   cookie: {
     httpOnly: true,
     secure: isProduction, // HTTPS in production
     sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site cookies in production
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    // Remove domain setting to let browser handle it
+    // Explicitly set domain for production
+    domain: isProduction ? '.onrender.com' : undefined
   },
   name: 'github.session',
   rolling: true // Reset expiry on each request
@@ -70,11 +74,17 @@ app.use(passport.session());
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
   console.log('Origin:', req.get('Origin'));
+  console.log('Referer:', req.get('Referer'));
   console.log('Session ID:', req.sessionID);
   console.log('Session exists:', !!req.session);
   console.log('User in session:', !!req.session?.passport?.user);
   console.log('Is Authenticated:', req.isAuthenticated());
-  console.log('Cookies:', req.headers.cookie);
+  console.log('Cookie header:', req.headers.cookie);
+  console.log('Session cookie config:', {
+    secure: req.sessionStore?.cookie?.secure,
+    sameSite: req.sessionStore?.cookie?.sameSite,
+    domain: req.sessionStore?.cookie?.domain
+  });
   console.log('---');
   next();
 });
@@ -112,7 +122,7 @@ passport.use(new GitHubStrategy({
     if (user) {
       console.log('Existing user found:', user.username);
       user.accessToken = accessToken;
-      user.avatar = profile.photos[0]?.value; // Update avatar
+      user.avatar = profile.photos[0]?.value;
       user.displayName = profile.displayName;
       await user.save();
       return done(null, user);
@@ -156,11 +166,12 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Enhanced auth middleware
+// Enhanced auth middleware with better error handling
 const requireAuth = (req, res, next) => {
   console.log('Auth check - Session:', !!req.session);
   console.log('Auth check - User:', !!req.user);
   console.log('Auth check - Authenticated:', req.isAuthenticated());
+  console.log('Auth check - Session passport:', req.session?.passport);
   
   if (req.isAuthenticated() && req.user) {
     return next();
@@ -169,11 +180,13 @@ const requireAuth = (req, res, next) => {
   console.log('Authentication failed');
   res.status(401).json({ 
     error: 'Authentication required',
+    message: 'Please login with GitHub to access this resource',
     debug: {
       hasSession: !!req.session,
       hasUser: !!req.user,
       isAuthenticated: req.isAuthenticated(),
-      sessionID: req.sessionID
+      sessionID: req.sessionID,
+      passportSession: req.session?.passport
     }
   });
 };
@@ -230,19 +243,28 @@ const getNextDay = (date) => {
   return nextDay;
 };
 
-// Health check endpoint
+// Health check endpoint - enhanced with session info
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    session: {
+      configured: !!req.sessionStore,
+      hasSession: !!req.session,
+      sessionID: req.sessionID
+    }
   });
 });
 
-// Auth routes
+// Auth routes - Fixed callback handling
 app.get('/auth/github', (req, res, next) => {
   console.log('Starting GitHub auth flow');
+  // Store the origin for later redirect
+  if (req.get('Referer')) {
+    req.session.authOrigin = req.get('Referer');
+  }
   passport.authenticate('github', { scope: ['user', 'repo'] })(req, res, next);
 });
 
@@ -253,7 +275,16 @@ app.get('/auth/github/callback',
   (req, res) => {
     console.log('GitHub callback successful for user:', req.user?.username);
     console.log('Session after auth:', req.sessionID);
-    res.redirect(process.env.CLIENT_URL);
+    console.log('Session user:', req.session?.passport);
+    
+    // Save session explicitly before redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+      }
+      console.log('Session saved, redirecting to client');
+      res.redirect(process.env.CLIENT_URL);
+    });
   }
 );
 
@@ -268,19 +299,32 @@ app.post('/auth/logout', (req, res) => {
       if (err) {
         console.error('Session destroy error:', err);
       }
-      res.clearCookie('github.session');
+      res.clearCookie('github.session', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        domain: isProduction ? '.onrender.com' : undefined
+      });
       res.json({ message: 'Logged out successfully' });
     });
   });
 });
 
-// Debug session endpoint
+// Debug session endpoint - enhanced
 app.get('/api/session', (req, res) => {
   res.json({
     sessionID: req.sessionID,
     hasSession: !!req.session,
     hasUser: !!req.user,
     isAuthenticated: req.isAuthenticated(),
+    passportSession: req.session?.passport,
+    sessionCookie: req.session?.cookie,
+    headers: {
+      origin: req.get('Origin'),
+      referer: req.get('Referer'),
+      userAgent: req.get('User-Agent'),
+      cookie: req.headers.cookie ? 'present' : 'missing'
+    },
     user: req.user ? {
       id: req.user._id,
       username: req.user.username,
@@ -454,4 +498,6 @@ app.listen(PORT, () => {
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Client URL: ${process.env.CLIENT_URL}`);
   console.log(`Callback URL: ${process.env.GITHUB_CALLBACK_URL}`);
+  console.log(`Production mode: ${isProduction}`);
+  console.log(`Session config: secure=${isProduction}, sameSite=${isProduction ? 'none' : 'lax'}`);
 });
