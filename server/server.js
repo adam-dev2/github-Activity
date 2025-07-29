@@ -16,17 +16,18 @@ app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 
-// CORS configuration - Fixed for cross-origin cookies
+// CORS configuration - Simplified for same-domain hosting on Render
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests from your frontend domains
+    // Allow requests from your Render domains and localhost for development
     const allowedOrigins = [
-      'https://github-activity-silk.vercel.app',
+      'https://github-activity-frontend.onrender.com', // Your frontend Render URL
+      'https://github-activity.onrender.com', // Same domain requests
       'http://localhost:5173',
       'http://localhost:3000'
     ];
     
-    // Allow requests with no origin (mobile apps, postman, etc.)
+    // Allow requests with no origin (same domain, mobile apps, etc.)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -45,7 +46,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// Session configuration - Fixed for production
+// Session configuration - Optimized for Render same-domain hosting
 app.use(session({
   secret: process.env.SESSION_SECRET || 'github-activity-secret-key-change-in-production',
   resave: false,
@@ -58,13 +59,13 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: isProduction, // HTTPS in production
-    sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site cookies in production
+    sameSite: 'lax', // Use 'lax' for same-domain hosting
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    // Explicitly set domain for production
-    domain: isProduction ? '.onrender.com' : undefined
+    domain: undefined // Let browser handle domain automatically
   },
   name: 'github.session',
-  rolling: true // Reset expiry on each request
+  rolling: true, // Reset expiry on each request
+  proxy: true // Trust proxy for secure cookies
 }));
 
 app.use(passport.initialize());
@@ -302,8 +303,8 @@ app.post('/auth/logout', (req, res) => {
       res.clearCookie('github.session', {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        domain: isProduction ? '.onrender.com' : undefined
+        sameSite: 'lax',
+        domain: undefined
       });
       res.json({ message: 'Logged out successfully' });
     });
@@ -330,6 +331,30 @@ app.get('/api/session', (req, res) => {
       username: req.user.username,
       displayName: req.user.displayName
     } : null
+  });
+});
+
+// Test endpoint to verify cookie handling
+app.get('/api/test-cookies', (req, res) => {
+  // Set a test cookie with the same settings as session cookie
+  res.cookie('test-cookie', 'test-value', {
+    httpOnly: false, // Allow JS access for testing
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    maxAge: 60000, // 1 minute
+    domain: undefined
+  });
+  
+  res.json({
+    message: 'Test cookie set',
+    receivedCookies: req.headers.cookie || 'No cookies received',
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    cookieConfig: {
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      domain: 'undefined (let browser handle)'
+    }
   });
 });
 
