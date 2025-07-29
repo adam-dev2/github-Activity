@@ -7,6 +7,7 @@ const MongoStore = require('connect-mongo');
 const cors = require('cors');
 const axios = require('axios');
 const pMap = require('p-map');
+const PORT = process.env.PORT || 5000;
 require('dotenv').config();
 
 const app = express();
@@ -472,7 +473,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);

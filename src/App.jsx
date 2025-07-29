@@ -7,7 +7,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [authError, setAuthError] = useState(null);
 
@@ -125,13 +125,14 @@ const App = () => {
     const today = new Date();
     switch (option) {
       case 'today':
-        return today.toISOString().split('T')[0];
+        return today.toLocaleDateString('en-CA')
+;
       case 'yesterday':
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-        return yesterday.toISOString().split('T')[0];
+        return yesterday.toLocaleDateString('en-CA')
       default:
-        return today.toISOString().split('T')[0];
+        return today.toLocaleDateString('en-CA')
     }
   };
 
