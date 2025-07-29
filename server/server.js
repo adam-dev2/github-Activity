@@ -18,29 +18,10 @@ const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER
 
 // CORS configuration - Simplified for same-domain hosting on Render
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests from your Render domains and localhost for development
-    const allowedOrigins = [
-      'https://github-activity-frontend.onrender.com', // Your frontend Render URL
-      'https://github-activity-frontend.onrender.com/api/user', // Your frontend Render URL
-      'https://github-activity.onrender.com', // Same domain requests
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ];
-    
-    // Allow requests with no origin (same domain, mobile apps, etc.)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log('Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'), false);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200
+  origin: ['https://github-activity-frontend.onrender.com'],
+  credentials: true
 }));
+
 
 // Handle preflight requests
 // app.options('*', cors());
@@ -59,10 +40,9 @@ app.use(session({
   }),
   cookie: {
     httpOnly: true,
-    secure: isProduction, // HTTPS in production
-    sameSite: 'none', // Use 'lax' for same-domain hosting
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    domain: '.onrender.com' // Let browser handle domain automatically
+    secure: true,
+    sameSite: 'none',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   },
   name: 'github.session',
   rolling: true, // Reset expiry on each request
