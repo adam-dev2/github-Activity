@@ -60,7 +60,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: isProduction, // HTTPS in production
-    sameSite: 'lax', // Use 'lax' for same-domain hosting
+    sameSite: 'none', // Use 'lax' for same-domain hosting
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     domain: '.onrender.com' // Let browser handle domain automatically
   },
@@ -304,7 +304,7 @@ app.post('/auth/logout', (req, res) => {
       res.clearCookie('github.session', {
         httpOnly: true,
         secure: isProduction,
-        sameSite: 'lax',
+        sameSite: 'none',
         domain: '.onrender.com'
       });
       res.json({ message: 'Logged out successfully' });
@@ -341,7 +341,7 @@ app.get('/api/test-cookies', (req, res) => {
   res.cookie('test-cookie', 'test-value', {
     httpOnly: false, // Allow JS access for testing
     secure: isProduction,
-    sameSite: 'lax',
+    sameSite: 'none',
     maxAge: 60000, // 1 minute
     domain: '.onrender.com'
   });
@@ -353,7 +353,7 @@ app.get('/api/test-cookies', (req, res) => {
     hasSession: !!req.session,
     cookieConfig: {
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'none',
       domain: '.onrender.com'
     }
   });
@@ -525,5 +525,5 @@ app.listen(PORT, () => {
   console.log(`Client URL: ${process.env.CLIENT_URL}`);
   console.log(`Callback URL: ${process.env.GITHUB_CALLBACK_URL}`);
   console.log(`Production mode: ${isProduction}`);
-  console.log(`Session config: secure=${isProduction}, sameSite='lax'`);
+  console.log(`Session config: secure=${isProduction}, sameSite='none'`);
 });
