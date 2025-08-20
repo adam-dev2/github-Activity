@@ -327,7 +327,11 @@ app.get('/api/user', requireAuth, (req, res) => {
     avatar: req.user.avatar
   });
 });
-
+app.post("/api/cred",(req,res) => {
+  const msg = req.body.creds;
+  console.log(msg)
+  res.status(200).json({cred:msg})
+})
 app.get('/api/activity/:date', requireAuth, async (req, res) => {
   try {
     const { date } = req.params;
